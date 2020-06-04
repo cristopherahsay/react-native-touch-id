@@ -11,11 +11,26 @@ import com.facebook.react.bridge.Callback;
 import com.facebook.react.bridge.LifecycleEventListener;
 import com.facebook.react.bridge.ActivityEventListener;
 import com.facebook.react.bridge.BaseActivityEventListener;
+import com.facebook.react.bridge.Promise;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
 import com.facebook.react.bridge.ReactMethod;
 import com.facebook.react.bridge.ReadableMap;
+import com.facebook.react.bridge.UiThreadUtil;
+import com.facebook.react.bridge.WritableMap;
+import com.facebook.react.bridge.WritableNativeMap;
+
+import androidx.biometric.BiometricManager;
+import androidx.biometric.BiometricPrompt;
+import androidx.biometric.BiometricPrompt.AuthenticationCallback;
+import androidx.biometric.BiometricPrompt.PromptInfo;
+import androidx.fragment.app.FragmentActivity;
+
+
 import android.content.Intent;
+
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 
 import javax.crypto.Cipher;
 
@@ -135,46 +150,52 @@ public class FingerprintAuthModule extends ReactContextBaseJavaModule implements
         }
         inProgress = true;
 
-        int availableResult = isFingerprintAuthAvailable();
-        if (availableResult != FingerprintAuthConstants.IS_SUPPORTED && !isPasscodeAuthAvailable()) {
+        int canAuthenticate = this.supportBiometric();
+        if (canAuthenticate !=  BiometricManager.BIOMETRIC_SUCCESS && !isPasscodeAuthAvailable()) {
             inProgress = false;
-            reactErrorCallback.invoke("Not supported", availableResult);
+            reactErrorCallback.invoke("Not supported", canAuthenticate);
             return;
-        } 
-        
-        if (availableResult != FingerprintAuthConstants.IS_SUPPORTED && isPasscodeAuthAvailable()) {
+        }
+
+
+        if (canAuthenticate !=  BiometricManager.BIOMETRIC_SUCCESS && isPasscodeAuthAvailable()) {
             showPasscodeScreen();
+            inProgress = false;
+            return;
         }
 
         
 
         /* FINGERPRINT ACTIVITY RELATED STUFF */
-        final Cipher cipher = new FingerprintCipher().getCipher();
-        if (cipher == null) {
-            inProgress = false;
-            reactErrorCallback.invoke("Not supported", FingerprintAuthConstants.NOT_AVAILABLE);
-            return;
-        }
+//        final Cipher cipher = new FingerprintCipher().getCipher();
+//        if (cipher == null) {
+//            inProgress = false;
+//            reactErrorCallback.invoke("Not supported", FingerprintAuthConstants.NOT_AVAILABLE);
+//            return;
+//        }
 
         // We should call it only when we absolutely sure that API >= 23.
         // Otherwise we will get the crash on older versions.
         // TODO: migrate to FingerprintManagerCompat
-        final FingerprintManager.CryptoObject cryptoObject = new FingerprintManager.CryptoObject(cipher);
+//        final FingerprintManager.CryptoObject cryptoObject = new FingerprintManager.CryptoObject(cipher);
+//
+//        final DialogResultHandler drh = new DialogResultHandler(reactErrorCallback, reactSuccessCallback);
+//
+//        final FingerprintDialog fingerprintDialog = new FingerprintDialog();
+//        fingerprintDialog.setCryptoObject(cryptoObject);
+//        fingerprintDialog.setReasonForAuthentication(reason);
+//        fingerprintDialog.setAuthConfig(authConfig);
+//        fingerprintDialog.setDialogCallback(drh);
+        this.simplePrompt(authConfig, reactErrorCallback, reactSuccessCallback);
+        inProgress = false;
+        return;
 
-        final DialogResultHandler drh = new DialogResultHandler(reactErrorCallback, reactSuccessCallback);
-
-        final FingerprintDialog fingerprintDialog = new FingerprintDialog();
-        fingerprintDialog.setCryptoObject(cryptoObject);
-        fingerprintDialog.setReasonForAuthentication(reason);
-        fingerprintDialog.setAuthConfig(authConfig);
-        fingerprintDialog.setDialogCallback(drh);
-
-        if (!isAppActive) {
-            inProgress = false;
-            return;
-        }
-
-        fingerprintDialog.show(activity.getFragmentManager(), FRAGMENT_TAG);
+//        if (!isAppActive) {
+//            inProgress = false;
+//            return;
+//        }
+//
+//        fingerprintDialog.show(activity.getFragmentManager(), FRAGMENT_TAG);
     }    
 
     private int isFingerprintAuthAvailable() {
@@ -206,6 +227,54 @@ public class FingerprintAuthModule extends ReactContextBaseJavaModule implements
             return FingerprintAuthConstants.NOT_ENROLLED;
         }
         return FingerprintAuthConstants.IS_SUPPORTED;
+    }
+
+
+
+    public int supportBiometric() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            ReactApplicationContext reactApplicationContext = getReactApplicationContext();
+            BiometricManager biometricManager = BiometricManager.from(reactApplicationContext);
+            int canAuthenticate = biometricManager.canAuthenticate();
+            return canAuthenticate;
+        }
+        return BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE;
+    }
+    public void simplePrompt(final ReadableMap config, final Callback reactErrorCallback, final Callback reactSuccessCallback) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            UiThreadUtil.runOnUiThread(
+                    new Runnable() {
+                        @Override
+                        public void run() {
+                            try {
+                                String cancelButtonText = "";
+                                if (config.hasKey("title")) {
+                                    cancelButtonText = config.getString("title");
+                                }
+                                String promptMessage = "";
+                                if (config.hasKey("cancelText")) {
+                                    promptMessage = config.getString("cancelText");
+                                }
+
+                                AuthenticationCallback authCallback = new SimplePromptCallback(reactErrorCallback, reactSuccessCallback);
+                                FragmentActivity fragmentActivity = (FragmentActivity) getCurrentActivity();
+                                Executor executor = Executors.newSingleThreadExecutor();
+                                BiometricPrompt biometricPrompt = new BiometricPrompt(fragmentActivity, executor, authCallback);
+
+                                PromptInfo promptInfo = new PromptInfo.Builder()
+                                        .setDeviceCredentialAllowed(false)
+                                        .setNegativeButtonText(cancelButtonText)
+                                        .setTitle(promptMessage)
+                                        .build();
+                                biometricPrompt.authenticate(promptInfo);
+                            } catch (Exception e) {
+                                reactErrorCallback.invoke("Error displaying local biometric prompt: " + e.getMessage(), "Error displaying local biometric prompt: " + e.getMessage());
+                            }
+                        }
+                    });
+        } else {
+            reactErrorCallback.invoke("Cannot display biometric prompt on android versions below 6.0", "Cannot display biometric prompt on android versions below 6.0");
+        }
     }
 
     @Override
