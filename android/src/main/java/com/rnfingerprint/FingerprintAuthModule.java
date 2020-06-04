@@ -260,10 +260,8 @@ public class FingerprintAuthModule extends ReactContextBaseJavaModule implements
                                 FragmentActivity fragmentActivity = (FragmentActivity) getCurrentActivity();
                                 Executor executor = Executors.newSingleThreadExecutor();
                                 BiometricPrompt biometricPrompt = new BiometricPrompt(fragmentActivity, executor, authCallback);
-
                                 PromptInfo promptInfo = new PromptInfo.Builder()
-                                        .setDeviceCredentialAllowed(false)
-                                        .setNegativeButtonText(cancelButtonText)
+                                        .setDeviceCredentialAllowed(true)
                                         .setTitle(promptMessage)
                                         .build();
                                 biometricPrompt.authenticate(promptInfo);
