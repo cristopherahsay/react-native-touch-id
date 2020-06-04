@@ -25,7 +25,7 @@ public class SimplePromptCallback extends BiometricPrompt.AuthenticationCallback
             WritableMap resultMap = new WritableNativeMap();
             resultMap.putBoolean("success", false);
             resultMap.putString("error", "User cancellation");
-            this.successCallback.invoke(resultMap);
+            this.errorCallback.invoke(resultMap);
         } else {
             this.errorCallback.invoke(errString.toString(), errString.toString());
         }

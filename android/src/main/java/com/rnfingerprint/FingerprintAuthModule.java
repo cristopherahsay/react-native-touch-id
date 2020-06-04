@@ -247,13 +247,13 @@ public class FingerprintAuthModule extends ReactContextBaseJavaModule implements
                         @Override
                         public void run() {
                             try {
-                                String cancelButtonText = "";
-                                if (config.hasKey("title")) {
-                                    cancelButtonText = config.getString("title");
-                                }
                                 String promptMessage = "";
+                                if (config.hasKey("title")) {
+                                    promptMessage = config.getString("title");
+                                }
+                                String cancelButtonText = "";
                                 if (config.hasKey("cancelText")) {
-                                    promptMessage = config.getString("cancelText");
+                                    cancelButtonText = config.getString("cancelText");
                                 }
 
                                 AuthenticationCallback authCallback = new SimplePromptCallback(reactErrorCallback, reactSuccessCallback);
