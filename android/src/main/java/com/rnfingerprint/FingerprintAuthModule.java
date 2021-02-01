@@ -25,7 +25,8 @@ import androidx.biometric.BiometricPrompt;
 import androidx.biometric.BiometricPrompt.AuthenticationCallback;
 import androidx.biometric.BiometricPrompt.PromptInfo;
 import androidx.fragment.app.FragmentActivity;
-
+import com.facebook.react.modules.core.DeviceEventManagerModule;
+import com.facebook.react.bridge.Arguments;
 
 import android.content.Intent;
 
@@ -44,6 +45,7 @@ public class FingerprintAuthModule extends ReactContextBaseJavaModule implements
     public static boolean inProgress = false;
     private Callback reactNativeAuthSuccessCallback;
     private Callback reactNativeAuthErrorCallback;
+    private ReactApplicationContext reactContext;
 
     // new
     private final ActivityEventListener mActivityEventListener = new BaseActivityEventListener() {
@@ -61,17 +63,25 @@ public class FingerprintAuthModule extends ReactContextBaseJavaModule implements
 
     // new
     public void callbackAuthSuccess() {
-        this.reactNativeAuthSuccessCallback.invoke("Success");
+        // this.reactNativeAuthSuccessCallback.invoke("Success");
+        WritableMap params = Arguments.createMap();
+        params.putBoolean("result", true); 
+        params.putString("message", "success");
+        this.reactContext.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class).emit("authResult", params);
     }
 
     // new
     public void callbackAuthFail(int resultCode) {
-        this.reactNativeAuthErrorCallback.invoke("Fail", resultCode);
+        // this.reactNativeAuthErrorCallback.invoke("Fail", resultCode);
+        WritableMap params = Arguments.createMap();
+        params.putBoolean("result", false); 
+        params.putString("message", "Error code:" + resultCode);
+        this.reactContext.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class).emit("authResult", params);
     }
 
     public FingerprintAuthModule(final ReactApplicationContext reactContext) {
         super(reactContext);
-
+        this.reactContext = reactContext;
         reactContext.addLifecycleEventListener(this);
         reactContext.addActivityEventListener(mActivityEventListener);
     }
@@ -153,7 +163,11 @@ public class FingerprintAuthModule extends ReactContextBaseJavaModule implements
         int canAuthenticate = this.supportBiometric();
         if (canAuthenticate !=  BiometricManager.BIOMETRIC_SUCCESS && !isPasscodeAuthAvailable()) {
             inProgress = false;
-            reactErrorCallback.invoke("Not supported", canAuthenticate);
+            // reactErrorCallback.invoke("Not supported", canAuthenticate);
+            WritableMap params = Arguments.createMap();
+            params.putBoolean("result", false); 
+            params.putString("message", "Not supported");
+            this.reactContext.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class).emit("authResult", params);
             return;
         }
 
@@ -242,6 +256,7 @@ public class FingerprintAuthModule extends ReactContextBaseJavaModule implements
     }
     public void simplePrompt(final ReadableMap config, final Callback reactErrorCallback, final Callback reactSuccessCallback) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            final ReactApplicationContext reactApplicationContext = getReactApplicationContext();
             UiThreadUtil.runOnUiThread(
                     new Runnable() {
                         @Override
@@ -256,7 +271,7 @@ public class FingerprintAuthModule extends ReactContextBaseJavaModule implements
                                     cancelButtonText = config.getString("cancelText");
                                 }
 
-                                AuthenticationCallback authCallback = new SimplePromptCallback(reactErrorCallback, reactSuccessCallback);
+                                AuthenticationCallback authCallback = new SimplePromptCallback(reactErrorCallback, reactSuccessCallback, reactApplicationContext);
                                 FragmentActivity fragmentActivity = (FragmentActivity) getCurrentActivity();
                                 Executor executor = Executors.newSingleThreadExecutor();
                                 BiometricPrompt biometricPrompt = new BiometricPrompt(fragmentActivity, executor, authCallback);
@@ -266,12 +281,20 @@ public class FingerprintAuthModule extends ReactContextBaseJavaModule implements
                                         .build();
                                 biometricPrompt.authenticate(promptInfo);
                             } catch (Exception e) {
-                                reactErrorCallback.invoke("Error displaying local biometric prompt: " + e.getMessage(), "Error displaying local biometric prompt: " + e.getMessage());
+                                // reactErrorCallback.invoke("Error displaying local biometric prompt: " + e.getMessage(), "Error displaying local biometric prompt: " + e.getMessage());
+                                WritableMap params = Arguments.createMap();
+                                params.putBoolean("result", false); 
+                                params.putString("message", "Error displaying local biometric prompt: " + e.getMessage());
+                                reactApplicationContext.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class).emit("authResult", params);
                             }
                         }
                     });
         } else {
-            reactErrorCallback.invoke("Cannot display biometric prompt on android versions below 6.0", "Cannot display biometric prompt on android versions below 6.0");
+            // reactErrorCallback.invoke("Cannot display biometric prompt on android versions below 6.0", "Cannot display biometric prompt on android versions below 6.0");
+            WritableMap params = Arguments.createMap();
+            params.putBoolean("result", false); 
+            params.putString("message", "Cannot display biometric prompt on android versions below 6.0");
+            this.reactContext.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class).emit("authResult", params);
         }
     }
 
